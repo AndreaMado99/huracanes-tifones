@@ -1,0 +1,1279 @@
+---
+title: 'HURACANES Y TIFONES' 
+subtitle: 'Océano Atlántico y Pacífico (1851-2014)'
+author: "Andrea Marin Domingo"
+output: 
+   html_document:
+    highlight: espresso
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+    
+---
+\ 
+<style type="text/css">
+ .tab{ text-indent: 40px; }
+ body{ font-size: 150%; }
+ .question{background-color: #ccf6ff; font-size: 70%; font-weight: bold;}
+ .column-left{
+     float: left;
+     width: 33%;
+     text-align: left;
+}
+ .column-center{
+     display: inline-block;
+     width: 33%;
+     text-align: center;
+}
+ .column-right{
+     float: right;
+     width: 33%;
+     text-align: right;
+}
+</style>
+\ 
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\ 
+
+Cargar los datos:
+```{r}
+load("C:/Users/Andrea/Documents/ProyHurac/CSVDatabase/huracanes.rdata")
+```
+
+\ 
+
+
+##  TABLA DE CONTENIDOS
+
+  +    LIBRERÍAS
+  +    VALORES 
+  +    ESTADÍSTICA DESCRIPTIVA
+  +    INTERVALOS DE CONFIANZA
+  +    CONTRASTES/INFERENCIA
+
+
+
+\
+
+###  · LIBRERÍAS
+
+```{r include=TRUE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(devtools)
+library(lubridate)
+library(readxl)
+library(flextable)
+library(moments)
+library(ggplot2)
+library(janitor)
+library(sf)
+library(maps)
+library(mapdata)
+library(ggrepel)
+library(gganimate)
+library(dplyr)
+library(DT)
+library(rnaturalearth)
+library(transformr)
+library(rnaturalearthdata)
+library(rgeos)
+library(sp)
+library(DescTools)
+library(broom)
+library(EnvStats)
+library(PropCIs)
+library(PairedData)
+library(openair)
+library(data.table)
+library(gganimate)
+
+
+```
+
+
+\ 
+
+###  · VALORES USADOS
+
+  
+   **VARIABLES** |  **DEFINICIÓN** | 
+----------------------| ----------------------|
+*LatMean* | Latitud media a la que se ha producido el huracán 
+*LatMax* | Latitud máxima que ha alcanzado
+*LatMin* | Latitud mínima que ha alcanzado 
+*Longitude* | Longitud media a la que se ha producido el huracán
+*LongMin* | Longitud mínima que ha alcanzado
+*LongMax*|Longitud máxima que ha alcanzado
+*meanWind*|Intensidad media del viento durante ese huracán
+*minWind*|Intensidad mínima del viento durante ese huracán
+*maxWind*|Intensidad máxima del viento durante ese huracán
+*minPress*|Presión mínima 
+*maxPress*|Presión máxima
+*meanPress*|Presión media
+*Low Wind NE*|Radio máximo alcanzado por vientos de baja velocidad en dirección NE
+*Low Wind SE*|Radio máximo alcanzado por vientos de baja velocidad en dirección SE
+*Low Wind SW*|Radio máximo alcanzado por vientos de baja velocidad en dirección SW
+*Low Wind NW*|Radio máximo alcanzado por vientos de baja velocidad en dirección NW
+*Moderate Wind NE*|Radio máximo alcanzado por vientos de velocidad moderada en dirección NE
+*Moderate Wind SE*|Radio máximo alcanzado por vientos de velocidad moderada en dirección SE
+*Moderate Wind SW*|Radio máximo alcanzado por vientos de velocidad moderada en dirección SW
+*Moderate Wind NW*|Radio máximo alcanzado por vientos de velocidad moderada en dirección NW
+*High Wind NE*|Radio máximo alcanzado por vientos de alta velocidad en dirección NE
+*High Wind SE*|Radio máximo alcanzado por vientos de alta velocidad en dirección SE
+*High Wind SW*|Radio máximo alcanzado por vientos de alta velocidad en dirección SW
+*High Wind NW*|Radio máximo alcanzado por vientos de alta velocidad en dirección NW
+*duracion*|Duración del temporal en días
+*difLong*|Diferencia entre las longitudes máxima y mínima alcanzadas por el huracán
+*difLat*|Diferencia entre las latitudes máxima y mínima alcanzadas por el huracán
+
+\ 
+
+\ 
+
+Creamos nuestras variables principales: Océano Atlántico y Pacífico y Como  en nuestra base de datos existen datos no numéricos, vamos a transformalos en numéricos:
+
+
+```{r include=TRUE}
+
+#Huracanes Océano Atlántico
+huracanesAtlantico <- huracanes %>%
+  filter(oceano=="Atlantico") %>%
+  mutate(duracion=as.numeric(duracion)) 
+
+#Huracanes Océano Pacífico
+huracanesPacifico <- huracanes %>%
+  filter(oceano=="Pacifico") %>%
+  mutate(duracion=as.numeric(duracion)) 
+
+```
+
+\ 
+
+
+La función recibe como argumentos, el estimador del parámetro y los límites inferior y superior del intervalo de confianza. Por defecto se redondean los valores a 4 dígitos y se considera que el nivel de confianza el 0.95. El valor del nivel de confianza se usa solamente para poner nombre a la variable que designa el intervalo, como suele ser habitual en publicaciones científicas
+
+La función devuelve un data.frame con el estimador y el intervalo formateados con el número de dígitos indicado.
+
+
+
+```{r}
+formatInterval <- function(est, inf, sup, digits=4, conf.level=0.95){
+  CI <- sprintf("(%s, %s)",round(inf,digits),round(sup,digits))
+  estimate <- round(est,digits)
+  df <- data.frame(estimate,CI, stringsAsFactors = FALSE)
+  names(df)[2]=paste("CI",100*conf.level,"%",sep="")
+  return(df)
+}
+```
+
+\ 
+
+
+La función devuelve un data.frame con el estimador y el intervalo formateados con el número de dígitos indicado. La opción `label` permite especificar una etiqueta para el nombre del estimador.
+
+```{r}
+formatInterval <- function(est, inf, sup, digits=4, 
+                           conf.level=0.95, label="Estimate"){
+  CI <- sprintf("(%s, %s)",round(inf,digits),round(sup,digits))
+  estimate <- round(est,digits)
+  df <- data.frame(estimate,CI, stringsAsFactors = FALSE)
+  names(df)=c(label,paste("CI",100*conf.level,"%",sep=""))
+  return(df)
+}
+```
+
+\ 
+
+\ 
+
+###  · ESTADÍSTICA DESCRIPTIVA 
+#### Problema 1{.tabset .tabset-fade}
+
+<div class="info">
+Para cada una de estas variables se deben calcular los siguientes estadísticos descriptivos (para cada océano por separado):
+
+  +  Número de valores válidos y número de valores perdidos.
+  +  Media, sd, mediana, cuartil 25, cuartil 75, mínimo, máximo, asimetría, curtosis.
+  
+Estos valores deben presentarse en tablas para cada grupo de variables afines (latitudes, longitudes,viento, presion, Low-Moderate-High, duracion-diflong-diflat)
+</div>
+
+\ 
+
+##### OCÉANO ATLÁNTICO
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+valoresMedidos <- function(x) length(which(!is.na(x)))
+valoresNoMedidos <- function(x) length(which(is.na(x)))
+
+
+Mediciones <-huracanesAtlantico %>% dplyr::select(LatMean,LatMax,LatMin,LongMean,LongMax,LongMin,meanWind,maxWind,minWind, meanPress,maxPress,minPress, `Low Wind NE`, `Low Wind SE`, `Low Wind SW`,`Low Wind NW`,  `Moderate Wind NE`, `Moderate Wind SE`, `Moderate Wind SW`,`Moderate Wind NW`, `High Wind NE`, `High Wind SE`, `High Wind SW`,`High Wind NW`, difLong, difLat, duracion) %>% slice(1:27)
+
+Mediciones %>%
+  pivot_longer(cols = 1:27, names_to= "Mediciones", values_to="Valor") %>%  
+  group_by(Mediciones) %>%
+  summarise_at(vars(Valor),list(medidos=valoresMedidos,noMedidos=valoresNoMedidos)) %>%
+  flextable() %>%
+  fontsize(size=12,part="all")%>%
+  theme_zebra() %>%
+  autofit() %>%
+  set_caption("HURACANES/TIFONES MEDIDOS Y PERDIDOS EN EL OCÉANO ATLÁNTICO")
+```
+
+\ 
+ 
+
+
+
+```{r echo=FALSE,  error=TRUE}
+listaFunciones=list(Media=mean,
+                    Sd=sd,
+                    Asimetria=skewness,
+                    Curtosis=kurtosis,
+                    Min=min,
+                    Mediana=median,
+                    Max=max)
+
+variables <- huracanesAtlantico %>% dplyr::select(LatMean,LatMax,LatMin,LongMean,LongMax,LongMin,meanWind,maxWind,minWind, meanPress,maxPress,minPress, `Low Wind NE`, `Low Wind SE`, `Low Wind SW`,`Low Wind NW`,  `Moderate Wind NE`, `Moderate Wind SE`, `Moderate Wind SW`,`Moderate Wind NW`, `High Wind NE`, `High Wind SE`, `High Wind SW`,`High Wind NW`, difLong, difLat, duracion) %>% slice()
+
+variables %>% 
+  pivot_longer(cols = 1:27,names_to="Variables", values_to="Valor") %>% 
+  group_by(Variables) %>%  
+  summarise_at(vars(Valor), listaFunciones,na.rm=TRUE) %>% 
+  flextable() %>% 
+  fontsize(size=12,part="all")%>% 
+  theme_zebra() %>% 
+  autofit() %>% 
+  set_caption("DESCRIPCIÓN DE VARIABLES ESTADÍSTICAS:OCÉANO ATLÁNTICO")
+
+
+```
+
+\ 
+
+\ 
+
+##### OCÉANO PACÍFICO
+
+```{r echo=FALSE}
+valoresMedidos <- function(x) length(which(!is.na(x)))
+valoresNoMedidos <- function(x) length(which(is.na(x)))
+
+
+Mediciones <-huracanesPacifico %>% dplyr::select(`Low Wind NE`, `Low Wind SE`, `Low Wind SW`,`Low Wind NW`,  `Moderate Wind NE`, `Moderate Wind SE`, `Moderate Wind SW`,`Moderate Wind NW`, `High Wind NE`, `High Wind SE`, `High Wind SW`,`High Wind NW`, meanWind,maxWind,minWind,meanPress,maxPress,minPress,LatMean,LatMax,LatMin,LongMean,LongMax,LongMin, difLong, difLat, duracion) %>% slice(1:27) 
+
+Mediciones %>% 
+  pivot_longer(cols = 1:27, names_to= "Mediciones", values_to="Valor") %>%  
+  group_by(Mediciones) %>% 
+  summarise_at(vars(Valor),list(medidos=valoresMedidos,noMedidos=valoresNoMedidos)) %>% 
+  flextable() %>% 
+  fontsize(size=12,part="all")%>% 
+  theme_zebra() %>% 
+  autofit() %>% 
+  set_caption("HURACANES/TIFONES MEDIDOS EN EL OCÉANO PACÍFICO")
+
+
+
+```
+
+\ 
+
+```{r echo=FALSE,  error=TRUE}
+listaFunciones=list(Media=mean,
+                    Sd=sd,
+                    Asimetria=skewness,
+                    Curtosis=kurtosis,
+                    Min=min,
+                    Mediana=median,
+                    Max=max)
+
+variables <- huracanesPacifico %>% dplyr::select(LatMean,LatMax,LatMin,LongMean,LongMax,LongMin,meanWind,maxWind,minWind, meanPress,maxPress,minPress, `Low Wind NE`, `Low Wind SE`, `Low Wind SW`,`Low Wind NW`,  `Moderate Wind NE`, `Moderate Wind SE`, `Moderate Wind SW`,`Moderate Wind NW`, `High Wind NE`, `High Wind SE`, `High Wind SW`,`High Wind NW`, difLong, difLat, duracion) %>% slice()
+
+variables %>% 
+  pivot_longer(cols = 1:27,names_to="Variables", values_to="Valor") %>% 
+  group_by(Variables) %>%  
+  summarise_at(vars(Valor), listaFunciones,na.rm=TRUE) %>% 
+  flextable() %>% 
+  fontsize(size=12,part="all")%>% 
+  theme_zebra() %>% 
+  autofit() %>% 
+  set_caption("DESCRIPCIÓN DE VARIABLES ESTADÍSTICAS:OCÉANO PACÍFICO")
+
+
+```
+
+\ 
+
+\ 
+
+#### Problema 2{.tabset .tabset-fade}
+
+<div class="info">
+Las distribuciones de estas variables deben representarse mediante histogramas, que se presentarán agrupados en facetas mediante `facet_wrap()`.
+</div>
+
+##### DURACIÓN
+
+```{r echo=FALSE}
+huracanes %>% mutate(duracion=as.numeric(duracion)) %>% ggplot(aes(x=duracion, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 1, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Duración de los huracanes", title ="DISTRIBUCIÓN DE LA DURACIÓN DE HURACANES EN AMBOS OCÉANOS")
+```
+
+\ 
+
+##### LONGITUDES
+
+```{r echo=FALSE}
+huracanes %>% 
+  ggplot(aes(x=difLong, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 10, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Diferencia de Longitudes en los huracanes", title ="DISTRIBUCIÓN DE LA DIFERENCIA DE LONGITUDES EN AMBOS OCÉANOS")
+```
+
+\ 
+
+```{r echo=FALSE}
+huracanes %>% ggplot(aes(x=LongMin, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 5, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Longitud Mínima los huracanes", title ="DISTRIBUCIÓN LONGITUD MÍNIMA EN AMBOS OCÉANOS")
+
+huracanes %>% ggplot(aes(x=LongMean, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 5, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Longitud Media los huracanes", title ="DISTRIBUCIÓN LONGITUD MEDIA EN AMBOS OCÉANOS")
+
+huracanes %>% ggplot(aes(x=LongMax, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 5, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Longitud Máxima los huracanes", title ="DISTRIBUCIÓN LONGITUD MÁXIMA EN AMBOS OCÉANOS")
+```
+
+\ 
+
+##### LATITUDES
+
+```{r echo=FALSE}
+huracanes %>% 
+  ggplot(aes(x=difLat, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 1, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Diferencia de latitud en los huracanes", title ="DISTRIBUCIÓN DE DIFERENCIA DE LATITUDES EN AMBOS OCÉANOS")
+```
+
+\ 
+
+```{r echo=FALSE}
+huracanes %>% ggplot(aes(x=LatMin, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 1, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Latitud Mínima de los huracanes", title ="DISTRIBUCIÓN LATITUD MÍNIMA EN AMBOS OCÉANOS")
+
+       huracanes %>% ggplot(aes(x=LatMean, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 1, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Latitud Media de los huracanes", title ="DISTRIBUCIÓN DE LATITUD MEDIA EN AMBOS OCÉANOS")
+       
+        huracanes %>% ggplot(aes(x=LatMax, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 1, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Latitud Máxima de los huracanes", title ="DISTRIBUCIÓN DE LATITUD MÁXIMA EN AMBOS OCÉANOS")
+```
+
+\ 
+
+##### PRESIÓN
+
+```{r echo=FALSE,  warning=FALSE}
+huracanes %>% ggplot(aes(x=minPress, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 5, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Presión Mínima de los huracanes", title ="DISTRIBUCIÓN DE LA PRESIÓN MÍNIMA EN AMBOS OCÉANOS")
+
+       huracanes %>% ggplot(aes(x=meanPress, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 5, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Presión Mediana de los huracanes", title ="DISTRIBUCIÓN DE LA PRESIÓN MEDIA EN AMBOS OCÉANOS")
+       
+        huracanes %>% ggplot(aes(x=maxPress, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 5, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Presión Máxima de los huracanes", title ="DISTRIBUCIÓN DE LA PRESIÓN MÁXIMA EN AMBOS OCÉANOS")
+```
+
+\ 
+
+##### VIENTO
+
+```{r echo=FALSE}
+huracanes %>% ggplot(aes(x=minWind, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 5, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Viento Mínimo en los huracanes", title ="DISTRIBUCIÓN DEL VIENTO MÍNIMO EN AMBOS OCÉANOS")
+
+       huracanes %>% ggplot(aes(x=meanWind, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 5, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Viento Medio en los huracanes", title ="DISTRIBUCIÓN DEL VIENTO MEDIO EN AMBOS OCÉANOS")
+       
+        huracanes %>% ggplot(aes(x=maxWind, color=oceano))+guides(fill=TRUE)+geom_histogram(binwidth = 5, position = "stack",fill= "skyblue")+facet_wrap(~oceano,ncol = 2, scales = "free")+theme_dark()+theme(plot.title = element_text(hjust = 0.5,size = 12,face = "bold"),legend.position = "right")+labs(x="Viento Máximo los huracanes", title ="DISTRIBUCIÓN DEL VIENTO MÁXIMO EN AMBOS OCÉANOS")
+```
+
+\ 
+
+\ 
+
+#### Problema 3{.tabset .tabset-fade}
+<div class="info">
+Contar el número de huracanes ocurridos en periodos de 5 años (desde 1851) en cada uno de los dos océanos y representarlos en un diagrama de barras.
+</div>
+
+##### OCÉANO ATLÁNTICO
+
+```{r echo=FALSE,  eval=TRUE}
+huracanesAtlantico %>%
+  mutate(yearGrouped=cut(year,breaks=seq(1851,2015,by=5))) %>%
+  tabyl(yearGrouped) %>% 
+ggplot(aes(x=yearGrouped, y=n, fill=yearGrouped, color=yearGrouped))+geom_col(position = "dodge", width = 0.5,
+  na.rm = FALSE)+ labs(x='Año', y='Nº huracanes', title = 'Nº HURACANES EN EL ATLÁNTICO CADA 5 AÑOS')+ coord_flip() + theme(plot.title = element_text(hjust = 0.05, face = "bold",size = 12),legend.title = element_text(face = "bold", size = 10,hjust = 0.5),legend.box.background = element_rect(color="white", size=0.005),legend.position = "right", legend.box.margin = margin(50, 40, 20, 50))
+
+```
+
+\ 
+
+##### OCÉANO PACÍFICO
+
+```{r echo=FALSE, eval=TRUE}
+huracanesPacifico %>%
+  mutate(yearGrouped=cut(year,breaks=seq(1851,2015,by=5))) %>%
+  tabyl(yearGrouped) %>% 
+ggplot(aes(x=yearGrouped, y=n, fill=yearGrouped, color=yearGrouped))+geom_col(position = "dodge", width = 0.5,
+  na.rm = FALSE)+ labs(x='Año', y='Nº huracanes', title = 'Nº HURACANES EN EL PACÍFICO CADA 5 AÑOS')+ coord_flip() + theme(plot.title = element_text(hjust = 0.05, face = "bold",size = 12),legend.title = element_text(face = "bold", size = 10,hjust = 0.5),legend.box.background = element_rect(color="white", size=0.5),legend.position = "right", legend.box.margin = margin(50, 40, 20, 50))
+```
+
+\ 
+
+\ 
+
+#### Problema 4{.tabset .tabset-fade}
+<div class="info">
+Para cada oceano contar el número de huracanes cada mes en periodos de 25 años, esto es: número de huracanes en enero entre 1851 y 1875, entre 1876 y 1900, etc; lo mismo para febrero, marzo, etc. Como resultado se debe obtener una tabla cruzada con los meses en filas y los periodos de 25 años en columnas. Representar estos valores gráficamente y explorar si existe alguna tendencia.
+</div>
+
+##### OCÉANO ATLÁNTICO
+
+```{r echo=FALSE}
+huracanesAtlantico %>%
+  mutate(yearGrouped=cut(year,breaks=seq(1851,2015,by=25), dig.lab = 4)) %>%
+   mutate(mes=factor(mes,labels = c("Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Setiembre","Octubre","Noviembre","Dieciembre"))) %>%
+  tabyl(mes,yearGrouped, show_na = FALSE) %>%
+     adorn_percentages("col")%>% 
+  adorn_rounding(digits = 1) %>% 
+  adorn_ns() %>% 
+  adorn_title("combined",row_name = "Mes",col_name = "Año") %>%
+  flextable() %>% 
+  theme_zebra() %>% 
+    autofit() %>% 
+  set_caption("Nº HURACANES/MES CADA 25 AÑOS",style = "Table")
+```
+
+\ 
+
+```{r echo=FALSE}
+huracanesAtlantico %>% 
+   mutate(yearGrouped=cut(year,breaks=seq(1851,2015,by=25), dig.lab = 4)) %>%
+   mutate(mes=factor(mes,labels = c("Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Setiembre","Octubre","Noviembre","Dieciembre"))) %>%
+  tabyl(mes,yearGrouped, show_na = FALSE) %>% 
+  adorn_percentages("col") %>% 
+  pivot_longer(cols =-1, names_to = "yearGrouped", values_to = "proporcion") %>% 
+  mutate(porcentaje=100*proporcion) %>% 
+  ggplot(aes(x=mes, y=porcentaje, fill=yearGrouped)) +
+  geom_col(position = "stack") + coord_flip() +
+  labs(fill="NºHURACANES/MES CADA 25 AÑOS") +theme(plot.title=element_text(hjust = 0.05, face = "bold",size = 12),legend.position = "right",legend.title = element_text(face = "bold", size = 10,hjust = 0.5))
+
+
+```
+
+<div class="note">
+En el Océano Atlántico observamos que hay mayor rango de huracanes en el mes de setiembre, sobre todo entre los años 1851-1876. Seguidamente, le sigue el mes de octubre y finalmente agosto. Puede ser debido a que, a lo largo de la costa oeste de los EE. UU., las temperaturas del océano rara vez suben por encima de los 70, aún en medio del verano. Tales temperaturas relativamente frías no son energéticamente suficientes para sostener la fuerza de un huracán. Además, los huracanes tienden a moverse hacia el oeste-noroeste después de formarse en las latitudes tropicales y subtropicales. En el Atlántico, tal movimiento trae muchas veces el huracán a las cercanías de la costa este de los EE. UU.
+</div>
+
+\ 
+
+##### OCÉANO PACÍFICO
+
+```{r echo=FALSE}
+huracanesPacifico %>%
+  mutate(yearGrouped=cut(year,breaks=seq(1851,2015,by=25), dig.lab = 4)) %>% mutate(mes=factor(mes,labels = c("Febrero","Marzo","Mayo","Junio","Julio","Agosto","Setiembre","Octubre","Noviembre","Dieciembre"))) %>%
+  tabyl(mes,yearGrouped, show_na = FALSE, show_missing_levels=FALSE) %>%
+     adorn_percentages("col")%>% 
+  adorn_rounding(digits = 1) %>% 
+  adorn_ns() %>% 
+  adorn_title("combined",row_name = "Mes",col_name = "Año") %>%
+  flextable() %>% 
+  theme_zebra() %>% 
+    autofit() %>% 
+set_caption("Nº HURACANES/MES CADA 25 AÑOS",style = "Table")
+```
+
+\ 
+
+```{r echo=FALSE}
+huracanesPacifico %>% 
+   mutate(yearGrouped=cut(year,breaks=seq(1851,2015,by=25), dig.lab = 4)) %>%
+   mutate(mes=factor(mes,labels = c("Febrero","Marzo","Mayo","Junio","Julio","Agosto","Setiembre","Octubre","Noviembre","Dieciembre"))) %>%
+  tabyl(mes,yearGrouped, show_na = FALSE,show_missing_levels=FALSE ) %>%
+  adorn_percentages("col") %>% 
+  pivot_longer(cols =-1, names_to = "yearGrouped", values_to = "proporcion") %>% 
+  mutate(porcentaje=100*proporcion) %>% 
+  ggplot(aes(x=mes, y=porcentaje, fill=yearGrouped)) +
+  geom_col(position = "stack") + coord_flip() +
+  labs(fill="NºHURACANES/MES CADA 25 AÑOS") +theme(plot.title=element_text(hjust = 0.05, face = "bold",size = 12),legend.position = "right",legend.title = element_text(face = "bold", size = 10,hjust = 0.5))
+
+
+```
+
+<div class="note">
+En el Océano Pacífico sigue habiendo mayor número de huracanes en setiembre, seguido de agosto y julio, épocas con mayor temperatura. Además, hay una tendencia de mayor número entre los años 1926-1951. Sabemos que los huracanes en el Pacífico Nororiental casi nunca azotan los EE. UU., mientras que los de la cuenca del Atlántico azotan el continente de los EE. UU. menos de dos veces al año como promedio. En el Pacífico, la trayectoria hacia el oeste-noroeste aleja los huracanes de la costa oeste de los EE. UU, además de que los ciclones tropicales del Pacífico Noroccidental, que ocasionalmente se mueven hacia la costa oeste de los EE. UU se debilitan rápidamente o pierden fuerza al encontrar estas aguas más frías. Por esta razón encontramos mayor número de huracanes en el Atlántico, en aguas frías y temperaturas altas.
+</div>
+
+
+
+\ 
+
+\ 
+
+#### Problema 5{.tabset .tabset-fade}
+
+<div class="info">
+Explorar la intensidad y duración de los huracanes a lo largo del tiempo, así como las relaciones entre estas variables.
+</div>
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% ggplot(aes(x=duracion,y=meanWind))+geom_point(aes(shape= oceano, color=oceano),position = "identity", na.rm = FALSE,size=2)+scale_shape_manual(values = c(21,22))+scale_color_manual(values = c("#00007F","#9999CB"))+geom_smooth(method="lm", se=FALSE)+theme_dark()+theme(plot.title = element_text(hjust = 0.05, face = "bold",size = 12),legend.position = "right",legend.title = element_text(face = "bold", size = 10,hjust = 0.5),legend.box.background = element_rect(color="white", size=0.5), legend.box.margin = margin(50, 40, 20,50))+labs(x='Duración', y='Intensidad', title = 'INTENSIDAD/DURACIÓN EN LOS HURACANES EN EL TIEMPO')
+```
+<div class="note">
+En el gráfico podemos observar como hay una línea de tendencia que se inicia a partir de una intensidad de 40 Km/h aproximadamente, aunque si observamos, en el Atlántico encontramos huracanes con una intensidad menos de 0, pero con poca duración, en cambio, hay huracanes con una intensidad mayor de 50 Km/h con una duración mayor de 30 días. En el Pacífico podemos encontrar similitudes, como el núm. de huracanes con mayor intensidad y duración, aunque no hay huracanes con una duración menos de 10 días y una intensidad menos de 0.
+</div>
+
+
+
+
+\ 
+
+\ 
+
+#### Problema 6{.tabset .tabset-fade}
+
+<div class="info">
+Explorar las relaciones existentes entre las variables presión y velocidad del viento.
+</div>
+
+```{r echo=FALSE,  message=FALSE, warning=FALSE}
+huracanes %>% ggplot(aes(x=meanPress, y=meanWind))+guides(fill=TRUE)+geom_point(aes(shape= oceano, color=oceano),position = "identity", na.rm = FALSE,size=2)+scale_shape_manual(values = c(21,22))+scale_color_manual(values = c("#00007F","#9999CB"))+geom_smooth(method="lm", se=FALSE)+theme_dark()+theme(plot.title = element_text(hjust = 0.05, face = "bold",size = 12),legend.position = "right",legend.title = element_text(face = "bold", size = 10,hjust = 0.5),legend.box.background = element_rect(color="white", size=0.5), legend.box.margin = margin(50, 40, 20,50))+labs(x='Presión', y='Velocidad Viento', title = 'RELACIÓN ENTRE PRESIÓN Y VELOCIDAD DEL VIENTO EN AMBOS HURACANES')
+```
+
+<div class="note">
+En este gráfico observamos como hay un mayor número de huracanes, tanto del Atlántico como del Pacífico, con una presión entre los 1000-1050 pascales y una velocidad de unos 25 Km/h del viento. Esto es el mayor rango de huracanes encontrados, aunque como diferencia de ambos, podemos encontrar en el Atlántico huracanes con una presión menor de 925 y un viento muy fuerte, casi unos 100 Km/h.
+</div>
+
+\ 
+
+\ 
+
+#### Problema 7{.tabset .tabset-fade}
+
+<div class="info">
+Explorar las relaciones existentes entre los radios alcanzados por los vientos en las distintas direcciones.
+</div>
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE}
+low <- huracanes %>% 
+  dplyr::select(ID,year,starts_with("Low")) %>% 
+  pivot_longer(3:6,names_to="direction",values_to="low_radius") %>% 
+  filter(!is.na(low_radius)) %>% 
+  mutate(direction=substr(direction,10,11)) 
+
+moderate <- huracanes %>% 
+  dplyr::select(ID,year,starts_with("Moderate")) %>% 
+  pivot_longer(3:6,names_to="direction",values_to="mod_radius") %>% 
+  filter(!is.na(mod_radius)) %>% 
+  mutate(direction=substr(direction,15,16)) 
+
+high <- huracanes %>% 
+  dplyr::select(ID,year,starts_with("High")) %>% 
+  pivot_longer(3:6,names_to="direction",values_to="high_radius") %>% 
+  filter(!is.na(high_radius)) %>% 
+  mutate(direction=substr(direction,11,12)) 
+
+
+wind <- full_join(low,moderate) %>% 
+  full_join(high) %>% 
+  mutate(yearGrouped=cut(year, breaks=seq(2004,2016,by=3),dig.lab=4, include.lowest = TRUE))
+
+
+```
+
+\ 
+
+##### VIENTO SUAVE
+
+```{r echo=FALSE, warning=FALSE, error=FALSE}
+wind %>% 
+  ggplot(aes(x=direction,y=low_radius,fill=direction)) + 
+  geom_boxplot() +
+  guides(fill=FALSE)+ facet_wrap(~direction,ncol=4)
+```
+
+\ 
+
+##### VIENTO FUERTE
+
+```{r echo=FALSE, warning=FALSE, error=FALSE}
+wind %>% 
+  ggplot(aes(x=direction,y=high_radius,fill=direction)) + 
+  geom_boxplot() +
+  guides(fill=FALSE)+ facet_wrap(~direction,ncol=4)
+```
+
+\ 
+
+##### VIENTO MODERADO
+
+```{r echo=FALSE, warning=FALSE, error=FALSE}
+wind %>% 
+  ggplot(aes(x=direction,y=mod_radius,fill=direction)) + 
+  geom_boxplot() +
+  guides(fill=FALSE)+ facet_wrap(~direction,ncol=4)
+```
+
+
+\ 
+
+\ 
+
+#### Problema 8{.tabset .tabset-fade}
+
+<div class="info">
+Explorar las relaciones existentes entre el recorrido del huracán (diferencias en latitud y longitud) y la intensidad (velocidad del viento) y duración.
+</div>
+
+##### OCÉANO ATLÁNTICO
+
+```{r echo=FALSE}
+huracanesAtlantico %>% ggplot(aes(x=difLat, y=difLong, color=meanWind))+geom_point(position = "identity", na.rm = FALSE,size=2)+labs(x='Latitud', y='Longitud', title = 'RELACIÓN ENTRE EL RECORRIDO DEL HURACÁN CON LA INTENSIDAD')+theme(plot.title = element_text(face = "bold",size = 12,hjust = 0.5),legend.title = element_text(face = "bold",size = 10,hjust = 0.5),legend.position = "right")+theme_dark()
+
+
+huracanesAtlantico %>% ggplot(aes(x=difLat, y=difLong, color=duracion))+geom_point(position = "identity", na.rm = FALSE,size=2)+labs(x='Latitud', y='Longitud', title = 'RELACIÓN ENTRE EL RECORRIDO DEL HURACÁN CON LA DURACIÓN')+theme(plot.title = element_text(face = "bold",size = 12,hjust = 0.5),legend.title = element_text(face = "bold",size = 10,hjust = 0.5),legend.position = "right")+theme_dark()
+```
+
+\ 
+
+##### OCÉANO PACÍFICO
+
+```{r echo=FALSE}
+huracanesPacifico %>% ggplot(aes(x=difLat, y=difLong, color=meanWind))+geom_point(position = "identity", na.rm = FALSE,size=2)+labs(x='Latitud', y='Longitud', title = 'RELACIÓN ENTRE EL RECORRIDO DEL HURACÁN CON LA INTENSIDAD')+theme(plot.title = element_text(face = "bold",size = 12,hjust = 0.5),legend.title = element_text(face = "bold",size = 10,hjust = 0.5),legend.position = "right")+theme_dark()
+
+
+huracanesPacifico %>% ggplot(aes(x=difLat, y=difLong, color=duracion))+geom_point(position = "identity", na.rm = FALSE,size=2)+labs(x='Latitud', y='Longitud', title = 'RELACIÓN ENTRE EL RECORRIDO DEL HURACÁN CON LA DURACIÓN')+theme(plot.title = element_text(face = "bold",size = 12,hjust = 0.5),legend.title = element_text(face = "bold",size = 10,hjust = 0.5),legend.position = "right")+theme_dark()
+```
+
+\ 
+
+\ 
+
+#### Problema 9{.tabset .tabset-fade}
+
+<div class="info">
+Representar las posiciones de los huracanes sobre un mapa.
+</div>
+
+```{r echo=FALSE,  eval=FALSE, include=FALSE}
+data1<-read.csv('C:/Users/Andrea/Documents/ProyHurac/CSVDatabase/atlantic.csv')
+
+
+
+# Coordenadas
+dat<-as.character(data1$Latitude)
+new<-substr(dat,1,nchar(dat)-1)
+lat<-as.numeric(new)
+dat<-as.character(data1$Longitude)
+new<-substr(dat,1,nchar(dat)-1)
+long<-as.numeric(new)
+long<- -abs(long)
+coord<-as.data.frame(long)
+coord<-cbind(coord, lat)
+out<-subset(coord, long < -100) ##Encuentre los valores atípicos
+total<-cbind(data1, coord)
+outRM<-total[-c(22985,22986),]  ##Eliminar los valores atípicos
+hu<-outRM
+
+
+# Columna de Tiempo
+hu$Date<-as.character(hu$Date)
+hu$Time[hu$Time>0]<-hu$Time[hu$Time>0]/100
+hu$Date<-as.Date(hu$Date,'%Y%m%d')
+hu$Time<-ISOdatetime(hu$Date, hu$Time,0,0, 0, 0)
+
+# Datos de Manipulación
+hu$MaxWind.mph<-hu$Maximum.Wind*1.150779 # Convertir la velocidad del viento de nudos a millas por hora
+hu$Name<-trimws(as.character(hu$Name))
+
+# Columnas de interés
+hu.1<-as.data.frame(hu[c("ID","Name","lat","long","MaxWind.mph", "Time","Event", "Status")])
+
+hu.1$Event<-trimws(as.character(hu.1$Event))
+hu.1$Status<-trimws(as.character(hu.1$Status))
+
+# Huracanes en tiempo específico
+hu.list0405.1<-subset(hu.1, format.Date(Time, "%Y") %in% c("2004","2005"))
+hu.list0405.2<-subset(hu.1, Event=="L" & Status=="HU")
+hu.names0405<-intersect(hu.list0405.1$ID,hu.list0405.2$ID)
+hu.0405<-subset(hu.1, ID %in% hu.names0405)
+hu.0405<-subset(hu.0405,  format.Date(Time, "%H") %in% c("06","18"))
+
+
+## Añadir tiempo final
+end.data<-data.frame(matrix(0, nrow = 10, ncol = 8))
+end.data[,6]<-seq(max(hu.0405$Time), by = "days", length=10)
+names(end.data)<-names(hu.0405)
+end.data$ID<-"END"
+hu.0405<-rbind(hu.0405,end.data)
+
+jeanne <- hu.0405 %>% filter(Name=="JEANNE")
+
+```
+
+```{r echo=FALSE,  eval=FALSE, include=FALSE}
+# Gráfico Animado
+
+p3 <-hu.0405 %>% na.omit() %>%  
+  ggplot() + 
+  borders("world",colour="black",fill="#463527") +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+  geom_point(aes(long, lat, colour=MaxWind.mph,size=MaxWind.mph), alpha=0.5) +
+  #geom_path(aes(long, lat, colour=MaxWind.mph, group=Name)) +
+  geom_text(aes(x=long, y=lat-2, label=Name)) +
+  xlab("LONGITUDE") + ylab("LATITUDE") +  
+  scale_color_continuous(low = "#B9DBE3", high = "#000066",limits=c(0, 200), breaks=seq(0,200, by=50)) + 
+  scale_size_continuous(limits=c(0, 200), breaks=seq(0,200, by=50))  +  
+  guides(color= guide_legend(), size=guide_legend()) +
+  coord_map(projection = "mercator") +
+  scale_y_continuous( limits = c( 10 , +50 )) + scale_x_continuous( limits = c( -130 , -50 )) 
+p3
+
+
+
+p3 + labs(title = 'Time: {frame_time}', x = 'Longitude', y = 'Latitude') +
+  transition_time(Time)
+
+```
+
+\ 
+
+<center>
+![](C:/Users/Andrea/Documents/ProyHurac/mapahuracanes.gif){width=90%}
+</center>
+
+
+
+\ 
+
+\ 
+
+###  · INTERVALOS DE CONFIANZA
+#### Problema 1{.tabset .tabset-fade}
+
+<div class="info">
+Calcular, para cada uno de los dos océanos, intervalos de confianza al 95% para la media y desviación típica de las siguientes variables numéricas:
+
+  +  meanWind: intensidad media del viento durante ese huracán
+  +  meanPress: presión media
+  +  duracion: Duración del temporal en días
+  +  difLong: Diferencia entre las longitudes máxima y mínima alcanzadas por el huracán
+  +  difLat: Diferencia entre las latitudes máxima y mínima alcanzadas por el huracán
+
+</div>
+
+##### OCÉANO ATLÁNTICO
+
+```{r echo=FALSE}
+huracanesAtlantico %>% 
+  dplyr::select(meanWind, meanPress,duracion, difLong, difLat) %>% 
+  pivot_longer(1:5,names_to="Variable",values_to = "Valor") %>% 
+  group_by(Variable) %>% 
+  do(tidy(t.test(.$Valor, conf.level=0.95))) %>% 
+  do(formatInterval(.$estimate,.$conf.low,.$conf.high,digits=2,conf.level = 0.95)) %>% 
+  flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+  set_caption("MEDIAS ESTIMADAS E INTERVALOS DE CONFIANZA AL 95%") %>% 
+  theme_zebra() %>% 
+  autofit() 
+```
+
+
+\ 
+
+##### OCÉANO PACÍFICO
+
+```{r echo=FALSE }
+huracanesPacifico %>% 
+  dplyr::select(meanWind, meanPress,duracion, difLong, difLat) %>% 
+  pivot_longer(1:5,names_to="Variable",values_to = "Valor") %>% 
+  group_by(Variable) %>% 
+  do(tidy(t.test(.$Valor, conf.level=0.95))) %>% 
+  do(formatInterval(.$estimate,.$conf.low,.$conf.high,digits=2,conf.level = 0.95)) %>% 
+  flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+  set_caption("MEDIAS ESTIMADAS E INTERVALOS DE CONFIANZA AL 95%") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+<div class="note">
+En conclusión, si observamos los datos obtenidos de la media, los huracanes/tifones formados en el Océano Atlántico mantienen una Presión Media (990-992 milibar) más baja que el Pacífico (995-997), van a una velocidad similar a la del Pacífico (45-47 km/h). En cuanto a su duración, es similar ambos, aproximadamente unos 7 días, pero su diferencia tanto de Longitud como Latitud cambian entre los océanos, donde el Pacífico tiene mayor Diferencia de Longitud (21-27 m) pero menor Diferencia de Latitud (7-8 m), en cambio, el Atlántico es al revés, con menor Diferencia de Longitud (20-22 m) pero mayor Latitud (15-16 m).
+En cambio, en cuanto a los datos de la varianza, hay bastante contraste entre ambos Océanos. La velocidad del viento en el Atlántico es de uno 502-571 km/h, en cambio, en el Pacífico es aproximadamente un 20% menos, 210-250 km/h. La Presión media lo mismo, pero donde se ve la gran diferencia es en la Diferencia de Latitudes, donde en el Atlántico se observa entre 143-163 m y en el Pacífico 26-31 m.
+</div>
+
+
+\ 
+
+\ 
+
+#### Problema 2{.tabset .tabset-fade}
+
+<div class="info">
+Calcular, para cada océano, un intervalo de confianza al 95% para la proporción de huracanes que se producen en el mes de septiembre.
+</div>
+
+##### OCÉANO ATLÁNTICO
+
+```{r echo=FALSE,  warning=FALSE, message=FALSE}
+huracanesAtlantico %>% 
+  filter(!is.na(mes)) %>% 
+  summarize(nE=sum(mes==9),n=n()) %>% 
+  do(data.frame(BinomCI(.$nE,.$n,conf.level=0.95))) %>% 
+  do(formatInterval(.$est,.$lwr.ci,.$upr.ci)) %>% 
+  flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("INTERVALO DE CONFIANZA AL 95% EN SETIEMBRE") %>% 
+   theme_zebra() %>% 
+  autofit() 
+```
+
+\ 
+
+##### OCÉANO PACÍFICO
+
+```{r echo=FALSE,  warning=FALSE, message=FALSE}
+huracanesPacifico %>% 
+  filter(!is.na(mes)) %>% 
+  summarize(nE=sum(mes==9),n=n()) %>% 
+  do(data.frame(BinomCI(.$nE,.$n,conf.level=0.95))) %>% 
+  do(formatInterval(.$est,.$lwr.ci,.$upr.ci)) %>% 
+  flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("INTERVALO DE CONFIANZA AL 95% EN SETIEMBRE") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+<div class="note">
+A partir de los datos obtenidos sobre los intervalos de Confianza en cada Océano sobre la cantidad de huracanes en tan solo el mes de setiembre, podemos observar que hay un porcentaje mayor en el Atlántico, con un 35% aproximadamente, en cambio, en el Pacífico, un 24% aproximadamente. Normalmente, los huracanes se forman en las épocas más calurosas, su mayor actividad ciclónica suele tener lugar hacia finales de verano, aunque cada región tiene su período de temporada. En el caso del Océano Atlántico tiene lugar entre principios de junio y finales de setiembre, con un pico máximo entre el 10 de setiembre aproximadamente. Por este motivo, nuestro intervalo de Confianza es alto en el mes de setiembre. En cambio, en el Océano Pacífico tiene un período de temporada más amplio, ya que al ser un Océano tan grande se divide en varias regiones.(Aunque tiene un margen similar al Atlántico)En el noroeste del Pacífico, tiene su período de temporada entre el abril y enero, con un mínimo en febrero, marzo y un máximo en principios de setiembre. Por dicho motivo, el intervalo de Confianza es menor en el Pacífico.
+</div>
+
+\ 
+
+\ 
+
+#### Problema 3{.tabset .tabset-fade}
+
+<div class="info">
+Calcular la proporción de huracanes en el atlántico cuya velocidad máxima mayor o igual que 80 km/h. Repetir para el Pacífico.
+</div>
+
+##### OCÉANO ATLÁNTICO
+
+```{r echo=FALSE,  error=TRUE}
+huracanesAtlantico %>% 
+  mutate(masDe80=ifelse(maxWind>80,1,0)) %>% 
+  summarize(nE=sum(masDe80),n=n()) %>% 
+  do(data.frame(BinomCI(.$nE,.$n,conf.level=0.95))) %>% 
+  do(formatInterval(.$est,.$lwr.ci,.$upr.ci)) %>% 
+  flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+  set_caption("NºHURACANES CON VELOCIDAD MÁXIMA MAYOR O IGUAL 80 Km/h") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+##### OCÉANO PACÍFICO
+
+```{r echo=FALSE }
+huracanesPacifico %>% 
+  mutate(masDe80=ifelse(maxWind>80,1,0)) %>% 
+  summarize(nE=sum(masDe80),n=n()) %>% 
+  do(data.frame(BinomCI(.$nE,.$n,conf.level=0.95))) %>% 
+  do(formatInterval(.$est,.$lwr.ci,.$upr.ci)) %>% 
+  flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+  set_caption("NºHURACANES CON VELOCIDAD MÁXIMA MAYOR O IGUAL 80 Km/h") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+\ 
+
+#### Problema 4{.tabset .tabset-fade}
+<div class="info">
+Compara e interpreta mediante intervalos de confianza los valores medios y las desviaciones típicas de las siguientes variables entre los dos océanos, Atlántico y Pacífico.
+
+  +  meanWind: intensidad media del viento durante ese huracán
+  +  meanPress: presión media
+  +  duracion: Duración del temporal en días
+  +  difLong: Diferencia entre las longitudes máxima y mínima alcanzadas por el huracán
+  +  difLat: Diferencia entre las latitudes máxima y mínima alcanzadas por el huracán
+
+</div>
+
+##### MEANWIND
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% 
+  group_by(oceano) %>% 
+  summarize(WINDMedia=mean(meanWind)) %>% 
+flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("MEDIA DEL VIENTO MEDIO") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% 
+  do(tidy(t.test(.$meanWind~.$oceano,conf.level=0.95))) %>% 
+  do(formatInterval(.$estimate,.$conf.low,.$conf.high,conf.level = 0.95, label="Diferencia media")) %>% 
+  flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("INTERVALO CONFIANZA AL 95%") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% 
+  group_by(oceano) %>% 
+  summarize(sdMeanWind=sd(meanWind)) %>% 
+   flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("DESVIACIÓN TÍPICA VIENTO MEDIO") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% 
+  do(tidy(var.test(.$meanWind~.$oceano,conf.level=0.95))) %>% 
+  do(formatInterval(sqrt(.$estimate),sqrt(.$conf.low),sqrt(.$conf.high))) %>% 
+   flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("INTERVALO DE CONFIANZA 95%") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+##### MEANPRESS
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% 
+  filter(!is.na(meanPress)) %>% 
+  group_by(oceano) %>% 
+  summarize(PRESSMedia=mean(meanPress)) %>% 
+flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("MEDIA DE LA PRESSIÓN MEDIA") %>% 
+   theme_zebra() %>% 
+  autofit()
+
+```
+
+\ 
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% 
+    filter(!is.na(meanPress)) %>% 
+  do(tidy(t.test(.$meanPress~.$oceano,conf.level=0.95))) %>% 
+  do(formatInterval(.$estimate,.$conf.low,.$conf.high,conf.level = 0.95, label="Diferencia media")) %>% 
+  flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("INTERVALO DE CONFIANZA AL 95%") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% 
+  filter(!is.na(meanPress)) %>% 
+  group_by(oceano) %>% 
+  summarize(sdMeanPress=sd(meanPress)) %>% 
+   flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("DESVIACIÓN TÍPICA PRESIÓN MEDIA") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% 
+  do(tidy(var.test(.$meanPress~.$oceano,conf.level=0.95))) %>% 
+  do(formatInterval(sqrt(.$estimate),sqrt(.$conf.low),sqrt(.$conf.high))) %>% 
+   flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("INTERVALO CONFIANZA AL 95%") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+\ 
+
+##### DURACIÓN
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% 
+  group_by(oceano) %>% 
+  summarize(DurMedia=mean(duracion)) %>% 
+flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("MEDIA DE LA DURACIÓN") %>% 
+   theme_zebra() %>% 
+  autofit()
+
+```
+
+
+\ 
+
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% 
+  group_by(oceano) %>% 
+  summarize(sdDur=sd(duracion)) %>% 
+   flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("DESVIACIÓN TÍPICA DURACIÓN") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% 
+  do(tidy(var.test(.$duracion~.$oceano,conf.level=0.95))) %>% 
+  do(formatInterval(sqrt(.$estimate),sqrt(.$conf.low),sqrt(.$conf.high))) %>% 
+   flextable() %>% 
+  fontsize(size=14, part="all") %>% 
+   set_caption("INTERVALO DE CONFIANZA 95%") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+\ 
+
+##### DIFLONG
+
+```{r echo=FALSE,  message=FALSE}
+huracanes %>% 
+  group_by(oceano) %>% 
+  summarize(LongMedia=mean(difLong)) %>% 
+flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("MEDIA DE LA DIFERENCIA LONGITUDES") %>% 
+   theme_zebra() %>% 
+  autofit()
+
+```
+
+\ 
+
+```{r echo=FALSE, message=FALSE}
+huracanes %>% 
+  do(tidy(t.test(.$difLong~.$oceano,conf.level=0.95))) %>% 
+  do(formatInterval(.$estimate,.$conf.low,.$conf.high,conf.level = 0.95, label="Diferencia media")) %>% 
+  flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("INTERVALO DE CONFIANZA 95%") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+```{r echo=FALSE, message=FALSE}
+huracanes %>% 
+  group_by(oceano) %>% 
+  summarize(sdLong=sd(difLong)) %>% 
+   flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("DESVIACIÓN TÍPICA DE DIFERENCIA DE LONGITUDES") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+```{r echo=FALSE, message=FALSE}
+huracanes %>% 
+  do(tidy(var.test(.$difLong~.$oceano,conf.level=0.95))) %>% 
+  do(formatInterval(sqrt(.$estimate),sqrt(.$conf.low),sqrt(.$conf.high))) %>% 
+   flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("INTERVALO DE CONFIANZA 95%") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+\ 
+
+##### DIFLAT
+
+```{r echo=FALSE, message=FALSE}
+huracanes %>% 
+  group_by(oceano) %>% 
+  summarize(LatMedia=mean(difLat)) %>% 
+flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("MEDIA DIFERENCIA DE LATITUDES") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+```{r echo=FALSE, message=FALSE}
+huracanes %>% 
+  do(tidy(t.test(.$difLat~.$oceano,conf.level=0.95))) %>% 
+  do(formatInterval(.$estimate,.$conf.low,.$conf.high,conf.level = 0.95, label="Diferencia media")) %>% 
+  flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("INTERVALO DE CONFIANZA 95%") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+```{r echo=FALSE, message=FALSE}
+huracanes %>% 
+  group_by(oceano) %>% 
+  summarize(sdLat=sd(difLat)) %>% 
+   flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("DESVIACIÓN TÍPICA DIFERENCIA DE LATITUDES") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+```{r echo=FALSE, message=FALSE}
+huracanes %>% 
+  do(tidy(var.test(.$difLat~.$oceano,conf.level=0.95))) %>% 
+  do(formatInterval(sqrt(.$estimate),sqrt(.$conf.low),sqrt(.$conf.high))) %>% 
+   flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("INTERVALO DE CONFIANZA 95%") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+\ 
+
+\ 
+
+#### Problema 5{.tabset .tabset-fade}
+
+<div class="info">
+Calcular un intervalo de confianza al 95% para el cociente entre las proporciones de huracanes que se producen en el mes de septiembre en ambos océanos.
+</div>
+
+```{r echo=FALSE, message=FALSE}
+huracanes %>%
+  filter(!is.na(mes))%>%
+  group_by(oceano) %>%
+  summarise(nE=sum(mes==9),n=n()) %>% 
+   do(data.frame(BinomRatioCI(.$nE[1],.$n[1],.$nE[2],.$n[2],conf.level=0.95))) %>% 
+  do(formatInterval(.$est,.$lwr.ci,.$upr.ci, label="Proporción Radio")) %>% 
+flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("INTERVALO DE CONFIANZA 95% COCIENTE PROPORCIONES EN SETIEMBRE") %>% 
+   theme_zebra() %>% 
+  autofit() 
+```
+
+\ 
+
+\ 
+
+#### Problema 6{.tabset .tabset-fade}
+
+<div class="info">
+Calcular un intervalo de confianza para la diferencia entre las proporciones de huracanes cuyas velocidades máximas superan los 80Km/h en ambos océanos.
+</div>
+
+  +  Primero realizamos una tabla donde se representan los huracanes con una velocidad máxima que supera los 80Km/h en ambos océanos:
+  
+```{r echo=FALSE, message=FALSE}
+huracanes %>% 
+  mutate(masDe80=ifelse(maxWind>80,1,0)) %>%
+  group_by(oceano) %>% 
+  tabyl(oceano,masDe80) %>% 
+  adorn_totals("col") %>% 
+  flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+   set_caption("Nº HURACANES/OCÉANO SUPERAN LOS 80 Km/h") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+  +  Una vez tenemos la tabla, nos hacemos la idea de cuantos océanos pueden llegar a superar los 80Km/h, con estos datos realizamos el intervalo deseado:
+
+```{r echo=FALSE, message=FALSE}
+huracanes %>% 
+  mutate(masDe80=ifelse(maxWind>80,1,0)) %>%
+  group_by(oceano) %>%
+  summarize(nE=sum(masDe80),n=n()) %>% 
+  do(data.frame(BinomDiffCI(.$nE[1],.$n[1],.$nE[2],.$n[2],conf.level=0.95))) %>% 
+  do(formatInterval(.$est,.$lwr.ci,.$upr.ci,label="Diferencia")) %>%  
+  flextable() %>% 
+  fontsize(size=12, part="all") %>% 
+  set_caption("DIFERENCIA PROPORCIONES CON VELOCIDAD MAYOR 80 Km/h") %>% 
+   theme_zebra() %>% 
+  autofit()
+```
+
+
+\ 
+
+\ 
+
+###  · CONTRASTES
+#### Problema 1{.tabset .tabset-fade}
+
+<div class="info">
+¿Existe evidencia suficiente de que la proporción de huracanes del Atlántico afectados por viento máximo en el pacífico es mayor que el 50%?
+</div>
+
+\ 
+De acuerdo con lo que hemos señalado: $$\left.\begin{array}{l}H_0: \pi_e \leq{0.5}\\H_1: \pi_e>{0.5}\end{array}\right\}$$
+Donde calculamos nuestra proporción en nuestra muestra:
+
+```{r echo=FALSE, message=FALSE}
+huracanes %>% 
+  filter(!is.na(maxWind)) %>% 
+  tabyl(maxWind) %>% 
+  adorn_totals("row")
+
+```
+
+```{r echo=FALSE, message=FALSE}
+binom.test(185,2864,p=0.5,alternative="greater")
+```
+
+<div class="note">
+Como nuestro p-value es 1, concluimos que hay evidencia suficiente que se rechaza nuestra hipótesis, diciendo que hay mayor proporción de huracanes por viento máximo en el Pacífico que en el Atlántico.
+</div>
